@@ -1,0 +1,9 @@
+[package]
+name = "modelloader"
+version = "0.1.0"
+authors = ["Sean Humeniuk <seanhumeniuk@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+nom = "*"
+tdmath = { git = "https://github.com/sean-h/tdmath.git" }
