@@ -19,6 +19,21 @@ named!(spaces<&str, &str>,
     take_while1!(is_space)
 );
 
+named!(name<&str, &str>,
+    take_until!("\n")
+);
+
+named!(filename<&str, &str>,
+    take_until!("\n")
+);
+
+named!(line_end<&str, &str>,
+    preceded!(
+        opt!(spaces),
+        alt!(tag!("\n") | comment)
+    )
+);
+
 /*
     Comments
 */
@@ -39,10 +54,6 @@ named!(comment<&str, &str>,
 
 named!(object_name_specifier<&str, &str>,
     tag!("o")
-);
-
-named!(name<&str, &str>,
-    take_until!("\n")
 );
 
 named!(object_name<&str, &str>,
@@ -111,6 +122,59 @@ named!(vertex_normal<&str, Vector3>,
         alt!(tag!("\n") | comment) >>
 
         (Vector3::new(x, y, z))
+    )
+);
+
+/*
+    Materials
+*/
+
+named!(material_file<&str, &str>,
+    do_parse!(
+        tag!("mtllib") >>
+        spaces >>
+        name: filename >>
+        line_end >>
+
+        (name)
+    )
+);
+
+named!(usemtl<&str, &str>,
+    do_parse!(
+        tag!("usemtl") >>
+        spaces >>
+        name: name >>
+        opt!(spaces) >>
+        alt!(tag!("\n") | comment) >>
+
+        (name)
+    )
+);
+
+/*
+    Smooth Shading
+*/
+
+fn str_to_bool(s: &str) -> Result<bool, &str> {
+    if s == "on" {
+        Ok(true)
+    } else if s == "off" {
+        Ok(false)
+    } else {
+        Err("Cannot convert string to bool")
+    }
+}
+
+named!(smooth_shading<&str, bool>,
+    do_parse!(
+        tag!("s") >>
+        spaces >>
+        b: map_res!(take_until!("\n"), str_to_bool) >>
+        opt!(spaces) >>
+        alt!(tag!("\n") | comment) >>
+
+        (b)
     )
 );
 
@@ -260,7 +324,7 @@ mod tests {
         }
     }
 
-        #[test]
+    #[test]
     fn test_parse_face_missing_texture_coordinates() {
         match face("f 5//1 3//1 1//1\n") {
             Ok((remainder, face)) => {
@@ -271,5 +335,21 @@ mod tests {
             },
             Err(err) => panic!(err)
         }
+    }
+
+    #[test]
+    fn test_parse_usemtl() {
+        assert_eq!(usemtl("usemtl Material\n"), Ok(("", "Material")));
+    }
+
+    #[test]
+    fn test_parse_material_file() {
+        assert_eq!(material_file("mtllib cube_uv.mtl\n"), Ok(("", "cube_uv.mtl")))
+    }
+
+    #[test]
+    fn test_parse_smooth_shading() {
+        assert_eq!(smooth_shading("s off\n"), Ok(("", false)));
+        assert_eq!(smooth_shading("s on\n"), Ok(("", true)));
     }
 }
