@@ -34,6 +34,13 @@ named!(line_end<&str, &str>,
     )
 );
 
+named!(empty_line<&str, &str>,
+    preceded!(
+        opt!(spaces),
+        tag!("\n")
+    )
+);
+
 /*
     Comments
 */
@@ -46,6 +53,10 @@ named!(comment<&str, &str>,
 
         (comment)
     )
+);
+
+named!(ignore_line<&str, &str>,
+    alt!(empty_line | comment)
 );
 
 /*
@@ -73,6 +84,7 @@ named!(object_name<&str, &str>,
 
 named!(vertex<&str, Vector3>,
     do_parse!(
+        opt!(spaces) >>
         tag!("v") >>
         space >>
         x: float >>
@@ -80,10 +92,19 @@ named!(vertex<&str, Vector3>,
         y: float >>
         space >>
         z: float >>
-        opt!(spaces) >>
-        alt!(tag!("\n") | comment) >>
+        line_end >>
 
         (Vector3::new(x, y, z))
+    )
+);
+
+named!(vertex_list<&str, Vec<Vector3>>,
+    do_parse!(
+        opt!(many0!(ignore_line)) >>
+        v: many0!(vertex) >>
+        tag!("\n") >>
+
+        (v)
     )
 );
 
@@ -265,6 +286,41 @@ mod tests {
                 assert_eq!(v.x, 1.0);
                 assert_eq!(v.y, 1.0);
                 assert_eq!(v.z, -1.0);
+            },
+            Err(err) => panic!(err)
+        }
+    }
+
+    #[test]
+    fn test_parse_vertex_with_leading_whitespace() {
+        match vertex("   v 1.000000 1.000000 -1.000000 #Vertex 1\n") {
+            Ok((remainder, v)) => {
+                assert_eq!(remainder, "");
+                assert_eq!(v.x, 1.0);
+                assert_eq!(v.y, 1.0);
+                assert_eq!(v.z, -1.0);
+            },
+            Err(err) => panic!(err)
+        }
+    }
+
+    #[test]
+    fn test_parse_vertex_list() {
+        let s = "v 1.000000 1.000000 -1.000000\nv 1.000000 -1.000000 -1.000000\nv 1.000000 1.000000 1.000000\n\n";
+
+        match vertex_list(s) {
+            Ok((remainder, vertices)) => {
+                assert_eq!(remainder, "");
+                assert_eq!(vertices.len(), 3);
+                assert_eq!(vertices[0].x, 1.0);
+                assert_eq!(vertices[0].y, 1.0);
+                assert_eq!(vertices[0].z, -1.0);
+                assert_eq!(vertices[1].x, 1.0);
+                assert_eq!(vertices[1].y, -1.0);
+                assert_eq!(vertices[1].z, -1.0);
+                assert_eq!(vertices[2].x, 1.0);
+                assert_eq!(vertices[2].y, 1.0);
+                assert_eq!(vertices[2].z, 1.0);
             },
             Err(err) => panic!(err)
         }
