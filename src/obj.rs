@@ -1,13 +1,15 @@
 extern crate tdmath;
 
 use nom::*;
+use nom::types::CompleteStr;
 use tdmath::Vector3;
+use crate::model::*;
 
 /*
     Basic Parsers
 */
 
-named!(space<&str, &str>,
+named!(space<CompleteStr, CompleteStr>,
     tag!(" ")
 );
 
@@ -15,26 +17,26 @@ fn is_space(c: char) -> bool {
     c == ' '
 }
 
-named!(spaces<&str, &str>,
+named!(spaces<CompleteStr, CompleteStr>,
     take_while1!(is_space)
 );
 
-named!(name<&str, &str>,
+named!(name<CompleteStr, CompleteStr>,
     take_until!("\n")
 );
 
-named!(filename<&str, &str>,
+named!(filename<CompleteStr, CompleteStr>,
     take_until!("\n")
 );
 
-named!(line_end<&str, &str>,
+named!(line_end<CompleteStr, CompleteStr>,
     preceded!(
         opt!(spaces),
         alt!(tag!("\n") | comment)
     )
 );
 
-named!(empty_line<&str, &str>,
+named!(empty_line<CompleteStr, CompleteStr>,
     preceded!(
         opt!(spaces),
         tag!("\n")
@@ -45,7 +47,7 @@ named!(empty_line<&str, &str>,
     Comments
 */
 
-named!(comment<&str, &str>,
+named!(comment<CompleteStr, CompleteStr>,
     do_parse!(
         tag!("#") >>
         comment: take_until!("\n") >>
@@ -55,19 +57,23 @@ named!(comment<&str, &str>,
     )
 );
 
-named!(ignore_line<&str, &str>,
+named!(ignore_line<CompleteStr, CompleteStr>,
     alt!(empty_line | comment)
+);
+
+named!(ignore_lines<CompleteStr, Vec<CompleteStr>>,
+    many0!(comment)
 );
 
 /*
     Object Name
 */
 
-named!(object_name_specifier<&str, &str>,
+named!(object_name_specifier<CompleteStr, CompleteStr>,
     tag!("o")
 );
 
-named!(object_name<&str, &str>,
+named!(object_name<CompleteStr, CompleteStr>,
     do_parse!(
         object_name_specifier >>
         space >>
@@ -82,11 +88,11 @@ named!(object_name<&str, &str>,
     Vertex
 */
 
-named!(vertex<&str, Vector3>,
+named!(vertex<CompleteStr, Vector3>,
     do_parse!(
         opt!(spaces) >>
-        tag!("v") >>
-        space >>
+        tag!("v ") >>
+        opt!(space) >>
         x: float >>
         space >>
         y: float >>
@@ -98,11 +104,11 @@ named!(vertex<&str, Vector3>,
     )
 );
 
-named!(vertex_list<&str, Vec<Vector3>>,
+named!(vertex_list<CompleteStr, Vec<Vector3>>,
     do_parse!(
         opt!(many0!(ignore_line)) >>
         v: many0!(vertex) >>
-        tag!("\n") >>
+        opt!(tag!("\n")) >>
 
         (v)
     )
@@ -112,7 +118,7 @@ named!(vertex_list<&str, Vec<Vector3>>,
     Texture Coordinates
 */
 
-named!(texture_coordinates<&str, Vector3>,
+named!(texture_coordinates<CompleteStr, Vector3>,
     do_parse!(
         tag!("vt") >>
         space >>
@@ -126,11 +132,21 @@ named!(texture_coordinates<&str, Vector3>,
     )
 );
 
+named!(texture_coordinate_list<CompleteStr, Vec<Vector3>>,
+    do_parse!(
+        opt!(many0!(ignore_line)) >>
+        uv: many0!(texture_coordinates) >>
+        opt!(tag!("\n")) >>
+
+        (uv)
+    )
+);
+
 /*
     Vertex Normals
 */
 
-named!(vertex_normal<&str, Vector3>,
+named!(vertex_normal<CompleteStr, Vector3>,
     do_parse!(
         tag!("vn") >>
         space >>
@@ -146,11 +162,21 @@ named!(vertex_normal<&str, Vector3>,
     )
 );
 
+named!(vertex_normal_list<CompleteStr, Vec<Vector3>>,
+    do_parse!(
+        opt!(many0!(ignore_line)) >>
+        vn: many0!(vertex_normal) >>
+        opt!(alt!(tag!("\n") | eof!())) >>
+
+        (vn)
+    )
+);
+
 /*
     Materials
 */
 
-named!(material_file<&str, &str>,
+named!(material_file<CompleteStr, CompleteStr>,
     do_parse!(
         tag!("mtllib") >>
         spaces >>
@@ -161,7 +187,7 @@ named!(material_file<&str, &str>,
     )
 );
 
-named!(usemtl<&str, &str>,
+named!(usemtl<CompleteStr, CompleteStr>,
     do_parse!(
         tag!("usemtl") >>
         spaces >>
@@ -177,17 +203,17 @@ named!(usemtl<&str, &str>,
     Smooth Shading
 */
 
-fn str_to_bool(s: &str) -> Result<bool, &str> {
-    if s == "on" {
+fn str_to_bool(s: CompleteStr) -> Result<bool, CompleteStr> {
+    if s == CompleteStr("on") {
         Ok(true)
-    } else if s == "off" {
+    } else if s == CompleteStr("off") {
         Ok(false)
     } else {
-        Err("Cannot convert string to bool")
+        Err(CompleteStr("Cannot convert string to bool"))
     }
 }
 
-named!(smooth_shading<&str, bool>,
+named!(smooth_shading<CompleteStr, bool>,
     do_parse!(
         tag!("s") >>
         spaces >>
@@ -209,7 +235,7 @@ struct FaceIndexed {
     pub vertex_normals: [usize; 3],
 }
 
-named!(face_index<&str, (usize, Option<usize>, usize)>,
+named!(face_index<CompleteStr, (usize, Option<usize>, usize)>,
     do_parse!(
         v: digit >>
         opt!(tag!("/")) >>
@@ -226,7 +252,7 @@ named!(face_index<&str, (usize, Option<usize>, usize)>,
     )
 );
 
-named!(face<&str, FaceIndexed>,
+named!(face<CompleteStr, FaceIndexed>,
     do_parse!(
         tag!("f") >>
         space >>
@@ -246,30 +272,118 @@ named!(face<&str, FaceIndexed>,
     )
 );
 
+named!(face_list<CompleteStr, Vec<FaceIndexed>>,
+    do_parse!(
+        opt!(many0!(ignore_line)) >>
+        f: many0!(face) >>
+        opt!(alt!(tag!("\n") | eof!())) >>
+
+        (f)
+    )
+);
+
+pub fn parse_obj_file(data: &str) -> Model {
+    // Leading comments
+    let remainder = match ignore_lines(CompleteStr(data)) {
+        Ok((remainder, _)) => remainder,
+        Err(_) => panic!("Unable to parse OBJ file: error reading leading comments")
+    };
+
+    let (remainder, mtllib) = match material_file(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading material file")
+    };
+
+    let (remainder, obj_name) = match object_name(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading object name")
+    };
+
+    
+    let (remainder, vertex_positions) = match vertex_list(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading vertex positions")
+    };
+
+    let mut vertices = Vec::new();
+    for v in vertex_positions {
+        vertices.push(Vertex { p: v, uv: [0.0, 0.0]});
+    }
+
+    let (remainder, uvs) = match texture_coordinate_list(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading UV coordinates")
+    };
+
+    let (remainder, vertex_normals) = match vertex_normal_list(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading vertex normals")
+    };
+
+    let (remainder, usemtl) = match usemtl(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading usemtl")
+    };
+
+    let (remainder, smooth_shading) = match smooth_shading(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading smooth shading")
+    };
+
+    let (remainder, faces) = match face_list(remainder) {
+        Ok(f) => f,
+        Err(_) => panic!("Unable to parse OBJ file: error reading faces")
+    };
+
+    let mut triangles = Vec::new();
+
+    for f in faces {
+        
+    }
+
+    Model {
+        name: obj_name.to_string(),
+        vertices,
+        triangles,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_parse_object_name_specifier() {
-        assert_eq!(object_name_specifier("o cube"), Ok((" cube", "o")));
+        let input = CompleteStr("o cube");
+        let expected_remainder = CompleteStr(" cube");
+        let expected_output = CompleteStr("o");
+        assert_eq!(object_name_specifier(input), Ok((expected_remainder, expected_output)));
     }
 
     #[test]
     fn test_parse_name() {
-        assert_eq!(name("cube\n"), Ok(("\n", "cube")));
+        let input = CompleteStr("cube\n");
+        let expected_remainder = CompleteStr("\n");
+        let expected_output = CompleteStr("cube");
+        assert_eq!(name(input), Ok((expected_remainder, expected_output)));
     }
 
     #[test]
     fn test_parse_object_name() {
-        assert_eq!(object_name("o cube\n"), Ok(("", "cube")));
+        let input = CompleteStr("o cube\n");
+        let expected_remainder = CompleteStr("");
+        let expected_output = CompleteStr("cube");
+        assert_eq!(object_name(input), Ok((expected_remainder, expected_output)));
     }
 
     #[test]
     fn test_parse_vertex() {
-        match vertex("v 1.000000 1.000000 -1.000000\n") {
+        let input = CompleteStr("v 1.000000 1.000000 -1.000000\n");
+        let expected_remainder = CompleteStr("");
+
+        match vertex(input) {
             Ok((remainder, v)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(v.x, 1.0);
                 assert_eq!(v.y, 1.0);
                 assert_eq!(v.z, -1.0);
@@ -280,9 +394,12 @@ mod tests {
 
     #[test]
     fn test_parse_vertex_with_comment() {
-        match vertex("v 1.000000 1.000000 -1.000000 #Vertex 1\n") {
+        let input = CompleteStr("v 1.000000 1.000000 -1.000000 #Vertex 1\n");
+        let expected_remainder = CompleteStr("");
+
+        match vertex(input) {
             Ok((remainder, v)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(v.x, 1.0);
                 assert_eq!(v.y, 1.0);
                 assert_eq!(v.z, -1.0);
@@ -293,9 +410,12 @@ mod tests {
 
     #[test]
     fn test_parse_vertex_with_leading_whitespace() {
-        match vertex("   v 1.000000 1.000000 -1.000000 #Vertex 1\n") {
+        let input = CompleteStr("   v 1.000000 1.000000 -1.000000 #Vertex 1\n");
+        let expected_remainder = CompleteStr("");
+
+        match vertex(input) {
             Ok((remainder, v)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(v.x, 1.0);
                 assert_eq!(v.y, 1.0);
                 assert_eq!(v.z, -1.0);
@@ -306,11 +426,35 @@ mod tests {
 
     #[test]
     fn test_parse_vertex_list() {
-        let s = "v 1.000000 1.000000 -1.000000\nv 1.000000 -1.000000 -1.000000\nv 1.000000 1.000000 1.000000\n\n";
+        let input = CompleteStr("v 1.000000 1.000000 -1.000000\nv 1.000000 -1.000000 -1.000000\nv 1.000000 1.000000 1.000000\n");
+        let expected_remainder = CompleteStr("");
 
-        match vertex_list(s) {
+        match vertex_list(input) {
             Ok((remainder, vertices)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
+                assert_eq!(vertices.len(), 3);
+                assert_eq!(vertices[0].x, 1.0);
+                assert_eq!(vertices[0].y, 1.0);
+                assert_eq!(vertices[0].z, -1.0);
+                assert_eq!(vertices[1].x, 1.0);
+                assert_eq!(vertices[1].y, -1.0);
+                assert_eq!(vertices[1].z, -1.0);
+                assert_eq!(vertices[2].x, 1.0);
+                assert_eq!(vertices[2].y, 1.0);
+                assert_eq!(vertices[2].z, 1.0);
+            },
+            Err(err) => panic!(err)
+        }
+    }
+
+    #[test]
+    fn test_parse_vertex_list_with_following_texture_coordinates() {
+        let input = CompleteStr("v 1.000000 1.000000 -1.000000\nv 1.000000 -1.000000 -1.000000\nv 1.000000 1.000000 1.000000\nvt 0.333134 0.000200\n");
+        let expected_remainder = CompleteStr("vt 0.333134 0.000200\n");
+
+        match vertex_list(input) {
+            Ok((remainder, vertices)) => {
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(vertices.len(), 3);
                 assert_eq!(vertices[0].x, 1.0);
                 assert_eq!(vertices[0].y, 1.0);
@@ -328,19 +472,30 @@ mod tests {
 
     #[test]
     fn test_parse_comment() {
-        assert_eq!(comment("#this is a comment\n"), Ok(("", "this is a comment")));
+        let input = CompleteStr("#this is a comment\n");
+        let expected_remainder = CompleteStr("");
+        let expected_output = CompleteStr("this is a comment");
+        
+        assert_eq!(comment(input), Ok((expected_remainder, expected_output)));
     }
 
     #[test]
     fn test_parse_spaces() {
-        assert_eq!(spaces("   spaces  "), Ok(("spaces  ", "   ")));
+        let input = CompleteStr("   spaces  ");
+        let expected_remainder = CompleteStr("spaces  ");
+        let expected_output = CompleteStr("   ");
+
+        assert_eq!(spaces(input), Ok((expected_remainder, expected_output)));
     }
 
     #[test]
     fn test_parse_texture_coordinates() {
-        match texture_coordinates("vt 0.333134 0.000200\n") {
+        let input = CompleteStr("vt 0.333134 0.000200\n");
+        let expected_remainder = CompleteStr("");
+
+        match texture_coordinates(input) {
             Ok((remainder, v)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(v.x, 0.333134);
                 assert_eq!(v.y, 0.000200);
                 assert_eq!(v.z, 0.0);
@@ -351,9 +506,12 @@ mod tests {
 
     #[test]
     fn test_parse_vertex_normal() {
-        match vertex_normal("vn 0.0000 1.0000 0.0000\n") {
+        let input = CompleteStr("vn 0.0000 1.0000 0.0000\n");
+        let expected_remainder = CompleteStr("");
+
+        match vertex_normal(input) {
             Ok((remainder, v)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(v.x, 0.0);
                 assert_eq!(v.y, 1.0);
                 assert_eq!(v.z, 0.0);
@@ -363,15 +521,44 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_vertex_normal_list() {
+        let input = CompleteStr("vn 0.0000 1.0000 0.0000\nvn 0.0000 0.0000 1.0000\nvn -1.0000 0.0000 0.0000\n\n");
+        let expected_remainder = CompleteStr("");
+
+        match vertex_normal_list(input) {
+            Ok((remainder, vertex_normals)) => {
+                assert_eq!(remainder, expected_remainder);
+                assert_eq!(vertex_normals.len(), 3);
+                assert_eq!(vertex_normals[0].x, 0.0);
+                assert_eq!(vertex_normals[0].y, 1.0);
+                assert_eq!(vertex_normals[0].z, 0.0);
+                assert_eq!(vertex_normals[1].x, 0.0);
+                assert_eq!(vertex_normals[1].y, 0.0);
+                assert_eq!(vertex_normals[1].z, 1.0);
+                assert_eq!(vertex_normals[2].x, -1.0);
+                assert_eq!(vertex_normals[2].y, 0.0);
+                assert_eq!(vertex_normals[2].z, 0.0);
+            },
+            Err(err) => panic!(err)
+        }
+    }
+
+    #[test]
     fn test_parse_face_index() {
-        assert_eq!(face_index("1/16/10005 "), Ok((" ", (1, Some(16), 10005))));
+        let input = CompleteStr("1/16/10005 ");
+        let expected_remainder = CompleteStr(" ");
+
+        assert_eq!(face_index(input), Ok((expected_remainder, (1, Some(16), 10005))));
     }
 
     #[test]
     fn test_parse_face() {
-        match face("f 5/1/1 3/2/1 1/3/1\n") {
+        let input = CompleteStr("f 5/1/1 3/2/1 1/3/1\n");
+        let expected_remainder = CompleteStr("");
+
+        match face(input) {
             Ok((remainder, face)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(face.vertexes, [5, 3, 1]);
                 assert_eq!(face.texture_coordinates, [Some(1), Some(2), Some(3)]);
                 assert_eq!(face.vertex_normals, [1, 1, 1]);
@@ -382,9 +569,12 @@ mod tests {
 
     #[test]
     fn test_parse_face_missing_texture_coordinates() {
-        match face("f 5//1 3//1 1//1\n") {
+        let input = CompleteStr("f 5//1 3//1 1//1\n");
+        let expected_remainder = CompleteStr("");
+
+        match face(input) {
             Ok((remainder, face)) => {
-                assert_eq!(remainder, "");
+                assert_eq!(remainder, expected_remainder);
                 assert_eq!(face.vertexes, [5, 3, 1]);
                 assert_eq!(face.texture_coordinates, [None, None, None]);
                 assert_eq!(face.vertex_normals, [1, 1, 1]);
@@ -395,17 +585,41 @@ mod tests {
 
     #[test]
     fn test_parse_usemtl() {
-        assert_eq!(usemtl("usemtl Material\n"), Ok(("", "Material")));
+        let input = CompleteStr("usemtl Material\n");
+        let expected_remainder = CompleteStr("");
+        let expected_output = CompleteStr("Material");
+
+        assert_eq!(usemtl(input), Ok((expected_remainder, expected_output)));
     }
 
     #[test]
     fn test_parse_material_file() {
-        assert_eq!(material_file("mtllib cube_uv.mtl\n"), Ok(("", "cube_uv.mtl")))
+        let input = CompleteStr("mtllib cube_uv.mtl\n");
+        let expected_remainder = CompleteStr("");
+        let expected_output = CompleteStr("cube_uv.mtl");
+
+        assert_eq!(material_file(input), Ok((expected_remainder, expected_output)))
     }
 
     #[test]
     fn test_parse_smooth_shading() {
-        assert_eq!(smooth_shading("s off\n"), Ok(("", false)));
-        assert_eq!(smooth_shading("s on\n"), Ok(("", true)));
+        let input = CompleteStr("s off\n");
+        let expected_remainder = CompleteStr("");
+
+        assert_eq!(smooth_shading(input), Ok((expected_remainder, false)));
+
+        let input = CompleteStr("s on\n");
+        assert_eq!(smooth_shading(input), Ok((expected_remainder, true)));
+    }
+
+    #[test]
+    fn test_parse_obj_file() {
+        let s = include_str!("../assets/cube_uv.obj");
+
+        let model = parse_obj_file(s);
+
+        assert_eq!(model.name, "Cube");
+        assert_eq!(model.vertices.len(), 8);
+        //assert_eq!(model.triangles.len(), 12 * 3);
     }
 }
