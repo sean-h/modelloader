@@ -1,8 +1,12 @@
 #[macro_use]
 extern crate nom;
+extern crate tdmath;
 
 mod obj;
 pub mod model;
+
+pub use self::model::{Model, Vertex};
+pub use self::obj::parse_obj_file;
 
 #[cfg(test)]
 mod tests {
