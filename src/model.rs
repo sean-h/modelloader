@@ -2,6 +2,7 @@ extern crate tdmath;
 
 use tdmath::Vector3;
 
+#[derive(Debug)]
 pub struct Vertex {
     pub p: Vector3,
     pub uv: [f32; 2],

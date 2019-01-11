@@ -305,11 +305,6 @@ pub fn parse_obj_file(data: &str) -> Model {
         Err(_) => panic!("Unable to parse OBJ file: error reading vertex positions")
     };
 
-    let mut vertices = Vec::new();
-    for v in vertex_positions {
-        vertices.push(Vertex { p: v, uv: [0.0, 0.0]});
-    }
-
     let (remainder, uvs) = match texture_coordinate_list(remainder) {
         Ok(x) => x,
         Err(_) => panic!("Unable to parse OBJ file: error reading UV coordinates")
@@ -335,10 +330,22 @@ pub fn parse_obj_file(data: &str) -> Model {
         Err(_) => panic!("Unable to parse OBJ file: error reading faces")
     };
 
+    let mut vertices = Vec::new();
     let mut triangles = Vec::new();
-
     for f in faces {
-        
+        for i in 0..3 {
+            let p = vertex_positions[f.vertexes[i] - 1];
+            let uv = match f.texture_coordinates[i] {
+                Some(index) => uvs[index - 1],
+                None => Vector3::zero()
+            };
+            let v = Vertex {
+                p,
+                uv: [uv.x, uv.y],
+            };
+            triangles.push(vertices.len());
+            vertices.push(v);
+        }
     }
 
     Model {
@@ -619,7 +626,22 @@ mod tests {
         let model = parse_obj_file(s);
 
         assert_eq!(model.name, "Cube");
-        assert_eq!(model.vertices.len(), 8);
-        //assert_eq!(model.triangles.len(), 12 * 3);
+
+        assert_eq!(model.vertices.len(), 12 * 3);
+        assert_eq!(model.vertices[0].p.x, -1.0);
+        assert_eq!(model.vertices[0].p.y, 1.0);
+        assert_eq!(model.vertices[0].p.z, -1.0);
+        assert_eq!(model.vertices[6].p.x, -1.0);
+        assert_eq!(model.vertices[6].p.y, 1.0);
+        assert_eq!(model.vertices[6].p.z, 1.0);
+        assert_eq!(model.vertices[35].p.x, 1.0);
+        assert_eq!(model.vertices[35].p.y, -1.0);
+        assert_eq!(model.vertices[35].p.z, -1.0);
+
+        assert_eq!(model.triangles.len(), 12 * 3);
+        assert_eq!(model.triangles[0], 0);
+        assert_eq!(model.triangles[1], 1);
+        assert_eq!(model.triangles[2], 2);
+        assert_eq!(model.triangles[35], 35);
     }
 }
