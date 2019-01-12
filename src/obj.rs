@@ -233,6 +233,23 @@ named!(smooth_shading<CompleteStr, Option<bool>>,
 );
 
 /*
+    Polygon Group
+*/
+
+named!(polygon_group<CompleteStr, Option<CompleteStr>>,
+    opt!(
+        do_parse!(
+            tag!("g") >>
+            space >>
+            n: name >>
+            line_end >>
+
+            (n)
+        )
+    )
+);
+
+/*
     Face
 */
 
@@ -329,6 +346,12 @@ pub fn parse_obj_file(data: &str) -> Model {
     let (remainder, usemtl) = match usemtl(remainder) {
         Ok(x) => x,
         Err(_) => panic!("Unable to parse OBJ file: error reading usemtl")
+    };
+
+    // Parse 1 polygon group at the start of the face list. Ignore the polygon group.
+    let (remainder, _) = match polygon_group(remainder) {
+        Ok(x) => x,
+        Err(_) => panic!("Unable to parse OBJ file: error reading polygon group")
     };
 
     let (remainder, smooth_shading) = match smooth_shading(remainder) {
@@ -726,6 +749,14 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_polygon_group() {
+        let input = CompleteStr("g group1\n");
+        let expected_remainder = CompleteStr("");
+        let expected_output = Some(CompleteStr("group1"));
+        assert_eq!(polygon_group(input), Ok((expected_remainder, expected_output)));
+    }
+
+    #[test]
     fn test_parse_obj_file() {
         let s = include_str!("../assets/cube_uv.obj");
 
@@ -784,6 +815,32 @@ mod tests {
         let model = parse_obj_file(s);
 
         assert_eq!(model.name, "Object");
+
+        assert_eq!(model.vertices.len(), 12 * 3);
+        assert_eq!(model.vertices[0].p.x, -1.0);
+        assert_eq!(model.vertices[0].p.y, 1.0);
+        assert_eq!(model.vertices[0].p.z, -1.0);
+        assert_eq!(model.vertices[6].p.x, -1.0);
+        assert_eq!(model.vertices[6].p.y, 1.0);
+        assert_eq!(model.vertices[6].p.z, 1.0);
+        assert_eq!(model.vertices[35].p.x, 1.0);
+        assert_eq!(model.vertices[35].p.y, -1.0);
+        assert_eq!(model.vertices[35].p.z, -1.0);
+
+        assert_eq!(model.triangles.len(), 12 * 3);
+        assert_eq!(model.triangles[0], 0);
+        assert_eq!(model.triangles[1], 1);
+        assert_eq!(model.triangles[2], 2);
+        assert_eq!(model.triangles[35], 35);
+    }
+
+    #[test]
+    fn test_parse_obj_file_polygon_groups() {
+        let s = include_str!("../assets/cube_polygon_groups.obj");
+
+        let model = parse_obj_file(s);
+
+        assert_eq!(model.name, "Cube");
 
         assert_eq!(model.vertices.len(), 12 * 3);
         assert_eq!(model.vertices[0].p.x, -1.0);
