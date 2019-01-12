@@ -75,8 +75,10 @@ named!(ignore_lines<CompleteStr, Vec<CompleteStr>>,
 named!(object_name<CompleteStr, Option<CompleteStr>>,
     opt!(
         do_parse!(
+            opt!(many0!(line_end)) >>
+            opt!(spaces) >>
             tag!("o") >>
-            space >>
+            spaces >>
             n: name >>
             line_end >>
 
@@ -94,11 +96,11 @@ named!(vertex<CompleteStr, Vector3>,
         opt!(many0!(line_end)) >>
         opt!(spaces) >>
         tag!("v ") >>
-        opt!(space) >>
+        opt!(spaces) >>
         x: float >>
-        space >>
+        spaces >>
         y: float >>
-        space >>
+        spaces >>
         z: float >>
         line_end >>
 
@@ -124,9 +126,9 @@ named!(texture_coordinates<CompleteStr, Vector3>,
         opt!(many0!(line_end)) >>
         opt!(spaces) >>
         tag!("vt") >>
-        space >>
+        spaces >>
         x: float >>
-        space >>
+        spaces >>
         y: float >>
         opt!(space) >>
         opt!(float) >>
@@ -154,11 +156,11 @@ named!(vertex_normal<CompleteStr, Vector3>,
         opt!(many0!(line_end)) >>
         opt!(spaces) >>
         tag!("vn") >>
-        space >>
+        spaces >>
         x: float >>
-        space >>
+        spaces >>
         y: float >>
-        space >>
+        spaces >>
         z: float >>
         line_end >>
 
@@ -182,6 +184,8 @@ named!(vertex_normal_list<CompleteStr, Vec<Vector3>>,
 named!(material_file<CompleteStr, Option<CompleteStr>>,
     opt!(
         do_parse!(
+            opt!(many0!(line_end)) >>
+            opt!(spaces) >>
             tag!("mtllib") >>
             spaces >>
             name: filename >>
@@ -195,6 +199,8 @@ named!(material_file<CompleteStr, Option<CompleteStr>>,
 named!(usemtl<CompleteStr, Option<CompleteStr>>,
     opt!(
         do_parse!(
+            opt!(many0!(line_end)) >>
+            opt!(spaces) >>
             tag!("usemtl") >>
             spaces >>
             name: name >>
@@ -210,9 +216,9 @@ named!(usemtl<CompleteStr, Option<CompleteStr>>,
 */
 
 fn str_to_bool(s: CompleteStr) -> Result<bool, CompleteStr> {
-    if s == CompleteStr("on") {
+    if s == CompleteStr("on") || s == CompleteStr("1") {
         Ok(true)
-    } else if s == CompleteStr("off") {
+    } else if s == CompleteStr("off") || s == CompleteStr("0") {
         Ok(false)
     } else {
         Err(CompleteStr("Cannot convert string to bool"))
@@ -222,6 +228,8 @@ fn str_to_bool(s: CompleteStr) -> Result<bool, CompleteStr> {
 named!(smooth_shading<CompleteStr, Option<bool>>,
     opt!(
         do_parse!(
+            opt!(many0!(line_end)) >>
+            opt!(spaces) >>
             tag!("s") >>
             spaces >>
             b: map_res!(take_until!("\n"), str_to_bool) >>
@@ -239,8 +247,10 @@ named!(smooth_shading<CompleteStr, Option<bool>>,
 named!(polygon_group<CompleteStr, Option<CompleteStr>>,
     opt!(
         do_parse!(
+            opt!(many0!(line_end)) >>
+            opt!(spaces) >>
             tag!("g") >>
-            space >>
+            spaces >>
             n: name >>
             line_end >>
 
@@ -281,11 +291,11 @@ named!(face<CompleteStr, FaceIndexed>,
         opt!(many0!(line_end)) >>
         opt!(spaces) >>
         tag!("f") >>
-        space >>
+        spaces >>
         i1: face_index >>
-        space >>
+        spaces >>
         i2: face_index >>
-        space >>
+        spaces >>
         i3: face_index >>
         line_end >>
 
@@ -306,12 +316,16 @@ named!(face_list<CompleteStr, Vec<FaceIndexed>>,
     )
 );
 
-pub fn parse_obj_file(data: &str) -> Model {
-    // Leading comments
-    let remainder = match ignore_lines(CompleteStr(data)) {
+fn discard_comments(data: CompleteStr) -> CompleteStr {
+    match ignore_lines(data) {
         Ok((remainder, _)) => remainder,
         Err(_) => panic!("Unable to parse OBJ file: error reading leading comments")
-    };
+    }
+}
+
+pub fn parse_obj_file(data: &str) -> Model {
+    // Leading comments
+    let remainder = discard_comments(CompleteStr(data));
 
     let (remainder, mtllib) = match material_file(remainder) {
         Ok(x) => x,
@@ -627,6 +641,23 @@ mod tests {
     #[test]
     fn test_parse_texture_coordinates_with_three_dimensions() {
         let input = CompleteStr("vt 0.333134 0.000200 0.000\n");
+        let expected_remainder = CompleteStr("");
+
+        match texture_coordinates(input) {
+            Ok((remainder, v)) => {
+                assert_eq!(remainder, expected_remainder);
+                assert_eq!(v.x, 0.333134);
+                assert_eq!(v.y, 0.000200);
+                assert_eq!(v.z, 0.0);
+            },
+            Err(err) => panic!(err)
+        }
+    }
+
+    
+    #[test]
+    fn test_parse_texture_coordinates_multiple_leading_spaces() {
+        let input = CompleteStr("vt   0.333134 0.000200\n");
         let expected_remainder = CompleteStr("");
 
         match texture_coordinates(input) {
