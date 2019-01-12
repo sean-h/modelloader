@@ -327,7 +327,7 @@ pub fn parse_obj_file(data: &str) -> Model {
     // Leading comments
     let remainder = discard_comments(CompleteStr(data));
 
-    let (remainder, mtllib) = match material_file(remainder) {
+    let (remainder, _) = match material_file(remainder) {
         Ok(x) => x,
         Err(_) => panic!("Unable to parse OBJ file: error reading material file")
     };
@@ -352,12 +352,12 @@ pub fn parse_obj_file(data: &str) -> Model {
         Err(_) => panic!("Unable to parse OBJ file: error reading UV coordinates")
     };
 
-    let (remainder, vertex_normals) = match vertex_normal_list(remainder) {
+    let (remainder, _) = match vertex_normal_list(remainder) {
         Ok(x) => x,
         Err(_) => panic!("Unable to parse OBJ file: error reading vertex normals")
     };
 
-    let (remainder, usemtl) = match usemtl(remainder) {
+    let (remainder, _) = match usemtl(remainder) {
         Ok(x) => x,
         Err(_) => panic!("Unable to parse OBJ file: error reading usemtl")
     };
@@ -368,12 +368,12 @@ pub fn parse_obj_file(data: &str) -> Model {
         Err(_) => panic!("Unable to parse OBJ file: error reading polygon group")
     };
 
-    let (remainder, smooth_shading) = match smooth_shading(remainder) {
+    let (remainder, _) = match smooth_shading(remainder) {
         Ok(x) => x,
         Err(_) => panic!("Unable to parse OBJ file: error reading smooth shading")
     };
 
-    let (remainder, faces) = match face_list(remainder) {
+    let (_, faces) = match face_list(remainder) {
         Ok(f) => f,
         Err(_) => panic!("Unable to parse OBJ file: error reading faces")
     };
