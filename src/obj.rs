@@ -352,7 +352,7 @@ pub fn parse_obj_file(data: &str) -> Model {
         Err(_) => panic!("Unable to parse OBJ file: error reading UV coordinates")
     };
 
-    let (remainder, _) = match vertex_normal_list(remainder) {
+    let (remainder, vertex_normals) = match vertex_normal_list(remainder) {
         Ok(x) => x,
         Err(_) => panic!("Unable to parse OBJ file: error reading vertex normals")
     };
@@ -387,9 +387,12 @@ pub fn parse_obj_file(data: &str) -> Model {
                 Some(index) => uvs[index - 1],
                 None => Vector3::zero()
             };
+            let normal = vertex_normals[f.vertex_normals[i] - 1];
+
             let v = Vertex {
                 p,
                 uv,
+                normal,
             };
             triangles.push(vertices.len());
             vertices.push(v);
@@ -805,6 +808,16 @@ mod tests {
         assert_eq!(model.vertices[35].p.x, 1.0);
         assert_eq!(model.vertices[35].p.y, -1.0);
         assert_eq!(model.vertices[35].p.z, -1.0);
+
+        assert_eq!(model.vertices[0].normal.x, 0.0);
+        assert_eq!(model.vertices[0].normal.y, 1.0);
+        assert_eq!(model.vertices[0].normal.z, 0.0);
+        assert_eq!(model.vertices[1].normal.x, 0.0);
+        assert_eq!(model.vertices[1].normal.y, 1.0);
+        assert_eq!(model.vertices[1].normal.z, 0.0);
+        assert_eq!(model.vertices[4].normal.x, 0.0);
+        assert_eq!(model.vertices[4].normal.y, 0.0);
+        assert_eq!(model.vertices[4].normal.z, 1.0);
 
         assert_eq!(model.triangles.len(), 12 * 3);
         assert_eq!(model.triangles[0], 0);
